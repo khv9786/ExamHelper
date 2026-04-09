@@ -199,7 +199,7 @@ function renderBlock(block, i) {
 // ─── 메인 컴포넌트 ───────────────────────────────────────────────
 
 export default function QuestionRenderer({ text, content }) {
-  // 블록 배열 모드 — content가 단일 진실 공급원, parseSections 호출 없음
+  // 블록 배열 모드 — content가 단일 진실 공급원, text 별도 렌더링 없음
   if (content) {
     let blocks = []
     try { blocks = JSON.parse(content) } catch { /* 파싱 실패 시 fallback */ }
@@ -207,11 +207,6 @@ export default function QuestionRenderer({ text, content }) {
     if (blocks.length > 0) {
       return (
         <div>
-          {text && (
-            <p className="text-slate-800 leading-relaxed text-[15px] whitespace-pre-wrap mb-2">
-              {text}
-            </p>
-          )}
           {blocks.map((block, i) => renderBlock(block, i))}
         </div>
       )

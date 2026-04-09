@@ -181,6 +181,10 @@ def extract_images_from_tag(tag: Tag) -> list[dict]:
     return blocks
 
 
+# 티스토리/컬러스크립터 노이즈 텍스트 (이슈 1)
+NOISE_TEXTS = {"반응형", "Colored by Color Scripter", "cs"}
+
+
 def to_blocks(siblings: list[Tag]) -> list[dict]:
     """
     문항 범위 내 형제 노드들을 순서 보존 블록 배열로 변환.
@@ -201,17 +205,18 @@ def to_blocks(siblings: list[Tag]) -> list[dict]:
         ):
             continue  # moreLess만 있는 div → 전체 스킵
 
-        # 코드 블록
+        # 코드 블록 — colorscripter-code 클래스 또는 내부 colorscripter-code-table로 감지 (이슈 3)
         code_div = None
         if "colorscripter-code" in el.get("class", []):
             code_div = el
         elif el.name == "div":
             code_div = el.select_one(".colorscripter-code")
+            if not code_div and el.select_one("table.colorscripter-code-table"):
+                code_div = el  # 클래스 다른 래퍼지만 내부에 코드 테이블 존재
 
         if code_div:
             value = extract_code(code_div)
             if value:
-                # 언어 추측: colorscripter-ko-[lang] 클래스
                 lang = ""
                 cls_str = " ".join(code_div.get("class", []))
                 m = re.search(r"colorscripter-ko-(\w+)", cls_str)
@@ -251,8 +256,12 @@ def to_blocks(siblings: list[Tag]) -> list[dict]:
         # 텍스트 블록 (<p>, <ul>, <ol> 등)
         if el.name in ("p", "ul", "ol", "div"):
             text = el.get_text(strip=True)
-            if text and text != "\xa0":
-                blocks.append({"kind": "text", "value": text})
+            # 노이즈 필터: 티스토리 버튼/컬러스크립터 워터마크 (이슈 1, 3)
+            if not text or text == "\xa0" or text in NOISE_TEXTS:
+                continue
+            if "Colored by Color Scripter" in text:
+                continue
+            blocks.append({"kind": "text", "value": text})
 
     return blocks
 
@@ -320,6 +329,11 @@ def parse_post(post_id: int, source_type: str) -> list[Question]:
 
         # 콘텐츠 블록 배열 생성
         blocks = to_blocks(siblings)
+
+        # q_text_part를 첫 블록으로 prepend — content가 단일 진실 공급원 (이슈 2)
+        # question_text는 검색/필터용으로 유지하되, 렌더링은 content만 사용
+        if q_text_part.strip():
+            blocks = [{"kind": "text", "value": q_text_part.strip()}] + blocks
 
         # 이미지 블록 로컬 다운로드 (CDN URL → /static/images/...)
         img_idx = 0
