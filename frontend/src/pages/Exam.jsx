@@ -116,7 +116,7 @@ function PartResults({ format, parts, partResults, correctAnswer }) {
   )
 }
 
-function QuestionCard({ question, onNext, total, current }) {
+function QuestionCard({ question, onNext, onSkip, total, current }) {
   const fmt = question.answer_format || null
   const initParts = () => Array.from({ length: fmt?.count || 1 }, () => '')
 
@@ -246,6 +246,14 @@ function QuestionCard({ question, onNext, total, current }) {
                 >
                   {showAnswer ? '정답 숨기기' : '정답 보기'}
                 </button>
+                <button
+                  onClick={onSkip}
+                  className="px-5 py-3 border-2 border-slate-200 text-slate-400 rounded-xl text-sm
+                             font-medium hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                  title="답 입력 없이 다음 문제로"
+                >
+                  건너뛰기
+                </button>
               </div>
 
               {showAnswer && question.answer && (
@@ -319,12 +327,25 @@ function QuestionCard({ question, onNext, total, current }) {
   )
 }
 
+const SESSION_KEY = 'exam_session'
+
 export default function Exam() {
   const [searchParams] = useSearchParams()
   const [questions, setQuestions] = useState([])
   const [index, setIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+
+  // searchParams → 직렬화 키 (random 모드 제외)
+  const sessionId = (() => {
+    const mode = searchParams.get('mode')
+    if (mode === 'random') return null   // 랜덤은 매번 달라 복원 불필요
+    return JSON.stringify({
+      year: searchParams.get('year'),
+      round: searchParams.get('round'),
+      mode,
+    })
+  })()
 
   useEffect(() => {
     const params = {
@@ -336,9 +357,24 @@ export default function Exam() {
     Object.keys(params).forEach(k => params[k] == null && delete params[k])
     getQuestions(params).then(data => {
       setQuestions(data)
+      // 세션 복원
+      if (sessionId) {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')
+          if (saved?.id === sessionId && saved.index < data.length) {
+            setIndex(saved.index)
+          }
+        } catch { /* 무시 */ }
+      }
       setLoading(false)
     })
   }, [searchParams])
+
+  // 인덱스 변경 시 세션 저장
+  useEffect(() => {
+    if (!sessionId || !questions.length) return
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sessionId, index }))
+  }, [index, sessionId, questions.length])
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-32 gap-3">
@@ -362,7 +398,7 @@ export default function Exam() {
       <p className="text-slate-400 text-sm">총 {questions.length}문제를 풀었습니다.</p>
       <div className="flex gap-3 justify-center pt-2">
         <button
-          onClick={() => setIndex(0)}
+          onClick={() => { setIndex(0); localStorage.removeItem(SESSION_KEY) }}
           className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-indigo-700"
         >
           다시 풀기
@@ -377,12 +413,15 @@ export default function Exam() {
     </div>
   )
 
+  const handleNext = () => setIndex(i => i + 1)
+
   return (
     <QuestionCard
       question={questions[index]}
       total={questions.length}
       current={index}
-      onNext={() => setIndex(i => i + 1)}
+      onNext={handleNext}
+      onSkip={handleNext}
     />
   )
 }
