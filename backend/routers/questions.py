@@ -5,13 +5,20 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from backend.database.db import get_db
-from backend.grading import check_answer
+from backend.grading import check_answer, check_answer_parts, detect_answer_format
 from backend.models.models import Question, UserProgress
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
 
 # --- 응답 스키마 ---
+
+class AnswerFormat(BaseModel):
+    type: str           # single | numbered | list
+    count: int
+    labels: list[str]   # numbered일 때 ["①","②",...]
+
+
 class QuestionOut(BaseModel):
     id: int
     post_id: int
@@ -25,18 +32,33 @@ class QuestionOut(BaseModel):
     post_title: str
     content: Optional[str] = None
     has_image: bool = False
+    answer_format: Optional[AnswerFormat] = None
 
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_question(cls, q: Question) -> "QuestionOut":
+        obj = cls.model_validate(q)
+        if q.answer:
+            fmt = detect_answer_format(q.answer)
+            obj.answer_format = AnswerFormat(
+                type=fmt["type"],
+                count=fmt["count"],
+                labels=fmt["labels"],
+            )
+        return obj
+
 
 class AnswerSubmit(BaseModel):
-    user_answer: str
+    user_answer: str = ""
+    user_parts: Optional[list[str]] = None   # 복수 파트 입력
 
 
 class AnswerResult(BaseModel):
     correct: bool
     correct_answer: Optional[str]
+    part_results: Optional[list[bool]] = None   # 파트별 O/X
 
 
 # --- 엔드포인트 ---
@@ -57,11 +79,10 @@ def list_questions(
         q = q.filter(Question.round == round)
     if source_type:
         q = q.filter(Question.source_type == source_type)
-
     if mode == "random":
         q = q.order_by(func.random())
 
-    return q.limit(limit).all()
+    return [QuestionOut.from_question(row) for row in q.limit(limit).all()]
 
 
 @router.get("/years")
@@ -84,7 +105,7 @@ def get_question(question_id: int, db: Session = Depends(get_db)):
     q = db.query(Question).filter(Question.id == question_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
-    return q
+    return QuestionOut.from_question(q)
 
 
 @router.post("/{question_id}/report")
@@ -107,9 +128,17 @@ def submit_answer(
     if not q:
         raise HTTPException(status_code=404, detail="문제를 찾을 수 없습니다.")
 
-    correct = check_answer(q.answer, body.user_answer)
+    if body.user_parts is not None:
+        # 복수 파트 채점
+        part_results = check_answer_parts(q.answer, body.user_parts)
+        correct = all(part_results)
+    else:
+        # 단일 문자열 채점 (하위 호환)
+        part_results = None
+        correct = check_answer(q.answer, body.user_answer)
+
     progress = UserProgress(question_id=question_id, is_correct=correct)
     db.add(progress)
     db.commit()
 
-    return AnswerResult(correct=correct, correct_answer=q.answer)
+    return AnswerResult(correct=correct, correct_answer=q.answer, part_results=part_results)

@@ -5,8 +5,11 @@ const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '' })
 export const getYears = () => api.get('/questions/years').then(r => r.data)
 export const getQuestions = (params) => api.get('/questions', { params }).then(r => r.data)
 export const getQuestion = (id) => api.get(`/questions/${id}`).then(r => r.data)
-export const submitAnswer = (id, userAnswer) =>
-  api.post(`/questions/${id}/answer`, { user_answer: userAnswer }).then(r => r.data)
+export const submitAnswer = (id, userAnswer, userParts = null) =>
+  api.post(`/questions/${id}/answer`, {
+    user_answer: userAnswer || '',
+    ...(userParts !== null && { user_parts: userParts }),
+  }).then(r => r.data)
 export const getStats = () => api.get('/progress/stats').then(r => r.data)
 export const getWrongNotes = () => api.get('/progress/wrong-notes').then(r => r.data)
 export const getBookmarks = () => api.get('/progress/bookmarks').then(r => r.data)

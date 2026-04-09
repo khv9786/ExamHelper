@@ -39,18 +39,103 @@ function ProgressBar({ current, total }) {
   )
 }
 
+// 답안 입력 컴포넌트
+function AnswerInput({ format, parts, onChange, onSubmit }) {
+  const isSingle = !format || format.type === 'single'
+
+  if (isSingle) {
+    return (
+      <textarea
+        className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm resize-none
+                   focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100
+                   transition-all placeholder-slate-300 leading-relaxed"
+        rows={4}
+        placeholder="답을 입력하세요..."
+        value={parts[0] || ''}
+        onChange={e => onChange([e.target.value])}
+        onKeyDown={e => e.key === 'Enter' && e.ctrlKey && onSubmit()}
+        autoFocus
+      />
+    )
+  }
+
+  const isOrdered = format.type === 'numbered'
+  return (
+    <div className="space-y-2">
+      {!isOrdered && (
+        <p className="text-xs text-slate-400">순서 무관하게 입력하세요</p>
+      )}
+      {Array.from({ length: format.count }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          {isOrdered && (
+            <span className="shrink-0 w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full text-sm
+                             font-bold flex items-center justify-center">
+              {format.labels[i] || i + 1}
+            </span>
+          )}
+          <input
+            type="text"
+            className="flex-1 border-2 border-slate-200 rounded-xl px-4 py-2 text-sm
+                       focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100
+                       transition-all placeholder-slate-300"
+            placeholder={`${isOrdered ? format.labels[i] || `${i+1}번` : `항목 ${i+1}`} 입력`}
+            value={parts[i] || ''}
+            onChange={e => {
+              const next = [...parts]
+              next[i] = e.target.value
+              onChange(next)
+            }}
+            onKeyDown={e => e.key === 'Enter' && e.ctrlKey && onSubmit()}
+            autoFocus={i === 0}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// 파트별 결과 표시
+function PartResults({ format, parts, partResults, correctAnswer }) {
+  if (!partResults || format?.type === 'single') return null
+  const isOrdered = format?.type === 'numbered'
+  return (
+    <div className="space-y-1.5 mt-3">
+      {partResults.map((ok, i) => (
+        <div key={i} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg
+          ${ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {isOrdered && (
+            <span className="font-bold w-5 text-center">
+              {format.labels[i] || i + 1}
+            </span>
+          )}
+          <span className="flex-1">{parts[i] || '(미입력)'}</span>
+          <span>{ok ? '✓' : '✗'}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function QuestionCard({ question, onNext, total, current }) {
-  const [answer, setAnswer] = useState('')
+  const fmt = question.answer_format || null
+  const initParts = () => Array.from({ length: fmt?.count || 1 }, () => '')
+
+  const [parts, setParts] = useState(initParts)
   const [result, setResult] = useState(null)
   const [showAnswer, setShowAnswer] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [reported, setReported] = useState(false)
 
+  const isSingle = !fmt || fmt.type === 'single'
+
   const handleSubmit = async () => {
-    if (!answer.trim() || submitting) return
+    const hasInput = parts.some(p => p.trim())
+    if (!hasInput || submitting) return
     setSubmitting(true)
-    const res = await submitAnswer(question.id, answer)
+    const res = isSingle
+      ? await submitAnswer(question.id, parts[0])
+      : await submitAnswer(question.id, '', parts)
     setResult(res)
     setSubmitting(false)
   }
@@ -61,7 +146,7 @@ function QuestionCard({ question, onNext, total, current }) {
   }
 
   const handleNext = () => {
-    setAnswer('')
+    setParts(initParts())
     setResult(null)
     setShowAnswer(false)
     setReported(false)
@@ -138,21 +223,16 @@ function QuestionCard({ question, onNext, total, current }) {
         <div className="p-5 space-y-4">
           {!result ? (
             <>
-              <textarea
-                className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm resize-none
-                           focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100
-                           transition-all placeholder-slate-300 leading-relaxed"
-                rows={4}
-                placeholder="답을 입력하세요..."
-                value={answer}
-                onChange={e => setAnswer(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && e.ctrlKey && handleSubmit()}
-                autoFocus
+              <AnswerInput
+                format={fmt}
+                parts={parts}
+                onChange={setParts}
+                onSubmit={handleSubmit}
               />
               <div className="flex gap-3">
                 <button
                   onClick={handleSubmit}
-                  disabled={!answer.trim() || submitting}
+                  disabled={!parts.some(p => p.trim()) || submitting}
                   className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold
                              hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
                              transition-colors text-sm"
@@ -171,7 +251,7 @@ function QuestionCard({ question, onNext, total, current }) {
               {showAnswer && question.answer && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
                   <div className="text-xs font-semibold text-blue-500 mb-1 uppercase tracking-wide">정답</div>
-                  <div className="text-blue-900 font-medium">{question.answer}</div>
+                  <div className="text-blue-900 font-medium whitespace-pre-wrap">{question.answer}</div>
                 </div>
               )}
             </>
@@ -192,20 +272,35 @@ function QuestionCard({ question, onNext, total, current }) {
                   </span>
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex gap-2">
-                    <span className="text-slate-500 w-16 shrink-0">내 답변</span>
-                    <span className={`font-medium ${result.correct ? 'text-green-800' : 'text-red-800'}`}>
-                      {answer}
+                {/* 파트별 결과 */}
+                {result.part_results ? (
+                  <PartResults
+                    format={fmt}
+                    parts={parts}
+                    partResults={result.part_results}
+                    correctAnswer={result.correct_answer}
+                  />
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex gap-2">
+                      <span className="text-slate-500 w-16 shrink-0">내 답변</span>
+                      <span className={`font-medium ${result.correct ? 'text-green-800' : 'text-red-800'}`}>
+                        {parts[0]}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {!result.correct && result.correct_answer && (
+                  <div className={`flex gap-2 pt-3 mt-3 border-t ${
+                    result.part_results ? 'border-slate-200' : 'border-red-200'
+                  }`}>
+                    <span className="text-slate-500 text-sm w-16 shrink-0">정답</span>
+                    <span className="font-bold text-green-700 text-sm whitespace-pre-wrap">
+                      {result.correct_answer}
                     </span>
                   </div>
-                  {!result.correct && result.correct_answer && (
-                    <div className="flex gap-2 pt-2 border-t border-red-200">
-                      <span className="text-slate-500 w-16 shrink-0">정답</span>
-                      <span className="font-bold text-green-700">{result.correct_answer}</span>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               <button
