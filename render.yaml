@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: infoprocess-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt && python backend/database/seed.py --reset
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
