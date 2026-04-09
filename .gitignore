@@ -10,6 +10,9 @@ backend/database/exam.db
 frontend/node_modules/
 frontend/dist/
 
+# 크롤링 다운로드 이미지
+backend/static/images/
+
 # Env
 .env
 .env.*

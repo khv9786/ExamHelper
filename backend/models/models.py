@@ -17,6 +17,8 @@ class Question(Base):
     answer = Column(Text, nullable=True)
     source_type = Column(String(20), default="exam")  # exam | summary
     post_title = Column(String(200))
+    content = Column(Text, nullable=True)        # 순서 보존 블록 배열 (JSON)
+    has_image = Column(Boolean, default=False)   # 이미지 포함 여부
     needs_review = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     review_memo = Column(Text, nullable=True)

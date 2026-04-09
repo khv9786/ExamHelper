@@ -120,8 +120,8 @@ function QuestionCard({ question, onNext, total, current }) {
           <span className="text-sm font-semibold text-indigo-700">문제</span>
         </div>
         <div className="p-5">
-          <QuestionRenderer text={question.question_text} />
-          {question.code_block && <CodeBlock code={question.code_block} />}
+          <QuestionRenderer text={question.question_text} content={question.content} />
+          {!question.content && question.code_block && <CodeBlock code={question.code_block} />}
         </div>
       </div>
 

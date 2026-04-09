@@ -52,6 +52,9 @@ for q in data:
         nq = dict(q)
         nq['number'] = num
         nq['question_text'] = body
+        # 블록은 원본 문항 단위라 분리 레코드에 복제 불가
+        nq['content'] = None
+        nq['has_image'] = False
         if num != first_num:
             nq['answer'] = None
         new_data.append(nq)
@@ -66,6 +69,8 @@ def is_valid(q):
     if q.get('answer'):
         return True
     if q.get('code_block'):
+        return True
+    if q.get('has_image'):
         return True
     if len(q['question_text']) >= 30:
         return True

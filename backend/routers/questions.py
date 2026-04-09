@@ -23,6 +23,8 @@ class QuestionOut(BaseModel):
     answer: Optional[str]
     source_type: str
     post_title: str
+    content: Optional[str] = None
+    has_image: bool = False
 
     class Config:
         from_attributes = True

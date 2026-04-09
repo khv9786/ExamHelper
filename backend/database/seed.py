@@ -23,11 +23,36 @@ DATA_FIELDS = {
     'post_id', 'year', 'round', 'number',
     'question_text', 'code_block', 'answer',
     'source_type', 'post_title',
+    'content', 'has_image',
 }
+
+
+def _migrate(conn):
+    """기존 DB에 새 컬럼이 없으면 추가 (멱등)
+    ⚠️ SQLite 전용. PostgreSQL 등으로 이전 시 PRAGMA table_info를
+    SELECT column_name FROM information_schema.columns WHERE table_name='questions'
+    로 교체하고 SQLAlchemy inspect()로 추상화할 것.
+    """
+    existing = {row[1] for row in conn.execute(
+        __import__('sqlalchemy').text("PRAGMA table_info(questions)")
+    )}
+    if 'content' not in existing:
+        conn.execute(__import__('sqlalchemy').text(
+            "ALTER TABLE questions ADD COLUMN content TEXT"
+        ))
+        print('[migrate] content 컬럼 추가')
+    if 'has_image' not in existing:
+        conn.execute(__import__('sqlalchemy').text(
+            "ALTER TABLE questions ADD COLUMN has_image INTEGER DEFAULT 0"
+        ))
+        print('[migrate] has_image 컬럼 추가')
 
 
 def seed(reset: bool = False):
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        _migrate(conn)
+        conn.commit()
 
     json_path = os.path.join(os.path.dirname(__file__), '../../crawler/questions.json')
     with open(json_path, encoding='utf-8') as f:

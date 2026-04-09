@@ -1,9 +1,13 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.database.db import engine
 from backend.models.models import Base
 from backend.routers import questions, progress, admin
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 Base.metadata.create_all(bind=engine)
 
@@ -19,6 +23,8 @@ app.add_middleware(
 app.include_router(questions.router)
 app.include_router(progress.router)
 app.include_router(admin.router)
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/")
